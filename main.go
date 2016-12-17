@@ -5,6 +5,7 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 	"log"
 )
 
@@ -22,9 +23,41 @@ const ElasticDBRankingDocType = "ranking"
 const RakutenAppId = "XXXXXXXXXXXXXXXXX"
 const APICallInterval = 1 * time.Second
 
+type RecipeLinebotConfig struct {
+	BotServer struct {
+		ListenAddr   string `json: "listen_addr"`
+		APIPath      string `json: "api_path"`
+		CertFilePath string `json: "cert_file_path"`
+		KeyFilePath  string `json: "key_file_path"`
+		ChSecret     string `json: "channel_secret"`
+		ChToken      string `json: "channel_token"`
+	} `json: "bot_server"`
+	RecipeDB struct {
+		Host           string `json: "host"`
+		Index          string `json: "index"`
+		RecipeDoctype  string `json: "recipe_doctype"`
+		RankingDoctype string `json: "ranking_doctype"`
+	} `json: "recipe_db"`
+	RakutenAPI struct {
+		AppId        string `json: "app_id"`
+		CallInterval int    `json: "call_interval"`
+	} `json: "rakuten_api"`
+}
+
 func main() {
-	mode := flag.String("m", "", "the running mode ('botserver', 'pullbatch')")
+	mode := flag.String("m", "", "running mode ('botserver', 'pullbatch')")
+	confpath := flag.String("c", "", "config file path")
 	flag.Parse()
+	conffile, err := os.Open(confpath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conffile.Close()
+	var conf RecipeLinebotConfig
+	err = json.Unmarchal(confdata, &conf)
+	if err != nil {
+		log.Fatal(err)
+	}
 	if *mode == "botserver" {
 		serveAsBot(conf)
 	} else if *mode == "pullbatch" {

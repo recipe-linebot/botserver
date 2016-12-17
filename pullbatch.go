@@ -12,17 +12,7 @@ import (
 	"path"
 	"strconv"
 	"time"
-
-	"github.com/minagawa-sho/recipe-linebot/rakutenapi"
 )
-
-// Hide the private setting values
-const RakutenAppId = "XXXXXXXXXXXXXXXXX"
-const ElasticDBHost = "XXX.XXX.XXX.XXX:XXX"
-const ElasticDBIndex = "recipe-linebot"
-const ElasticDBRecipeDocType = "recipe"
-const ElasticDBRankingDocType = "ranking"
-const APICallInterval = 1 * time.Second
 
 type RecipeDocument struct {
 	Materials   []string `json:"materials"`
@@ -37,9 +27,9 @@ type RankingDocument struct {
 	Recipes []int  `json:"recipes"`
 }
 
-func pullRecipesOnCategory(categoryId string, categoryName string) error {
+func pullRecipesOnCategory(categoryId string, categoryName string, config *RecipeLinebotConfig) error {
 	time.Sleep(APICallInterval)
-	ranking, err := rakutenapi.FetchRecipeRanking(categoryId, RakutenAppId)
+	ranking, err := FetchRecipeRanking(categoryId, RakutenAppId)
 	if err != nil {
 		return err
 	}
@@ -49,7 +39,8 @@ func pullRecipesOnCategory(categoryId string, categoryName string) error {
 		var recipes []int
 		for _, recipe := range ranking.Recipes {
 			log.Printf("post recipe: id=%v, title=%v", recipe.Id, recipe.Title)
-			apiUrl := url.URL{Scheme: "http", Host: ElasticDBHost, Path: path.Join(ElasticDBIndex, ElasticDBRecipeDocType, strconv.Itoa(recipe.Id))}
+			apiUrl := url.URL{Scheme: "http", Host: config.RecipeDB.Host,
+				Path: path.Join(config.RecipeDB.Index, config.RecipeDB.RecipeDocType, strconv.Itoa(recipe.Id))}
 			imageUrl, err := url.Parse(recipe.LargeImageUrl)
 			if err != nil {
 				log.Fatal(err)
@@ -65,7 +56,8 @@ func pullRecipesOnCategory(categoryId string, categoryName string) error {
 			recipes = append(recipes, recipe.Id)
 		}
 		log.Printf("post ranking: category=%v(%v), recipes=%v", categoryId, categoryName, recipes)
-		apiUrl := url.URL{Scheme: "http", Host: ElasticDBHost, Path: path.Join(ElasticDBIndex, ElasticDBRankingDocType, categoryId)}
+		apiUrl := url.URL{Scheme: "http", Host: ElasticDBHost,
+			Path: path.Join(config.RecipeDB.Index, ElasticDBRankingDocType, categoryId)}
 		document := RankingDocument{Concept: categoryName, Recipes: recipes}
 		reqBody, nil := json.Marshal(document)
 		if err != nil {
@@ -76,8 +68,8 @@ func pullRecipesOnCategory(categoryId string, categoryName string) error {
 	return nil
 }
 
-func pullRecipes() {
-	categories, err := rakutenapi.FetchRecipeCategories(rakutenapi.RecipeCategoryAll, RakutenAppId)
+func pullRecipes(config *RecipeLinebotConfig) {
+	categories, err := FetchRecipeCategories(RecipeCategoryAll, config.RakutenAPI.AppId)
 	if err != nil {
 		log.Print(err)
 	}
