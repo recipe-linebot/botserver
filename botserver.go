@@ -16,18 +16,9 @@ import (
 	"github.com/line/line-bot-sdk-go/linebot/httphandler"
 )
 
-// Hide the private setting values
-const ListenAddr = "XXX.XXX.XXX.XXX:XXX"
-const CertFile = "/path/to/fullchain.pem"
-const KeyFile = "/path/to/privkey.pem"
-const ChSecret = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-const ChToken = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 const ButtonLabel = "レシピを開く"
-const ElasticDBHost = "XXX.XXX.XXX.XXX:XXX"
-const ElasticDBIndex = "recipe-linebot"
-const ElasticDBRecipeDocType = "recipe"
 
-func replyRecipeCarousel(bot *linebot.Client, replyToken string, phrase string) {
+func replyRecipe(bot *linebot.Client, replyToken string, phrase string) {
 	apiUrl := url.URL{Scheme: "http", Host: ElasticDBHost, Path: path.Join(ElasticDBIndex, ElasticDBRecipeDocType, "_search")}
 	resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewBuffer([]byte(`{"size": 5, "query": {"multi_match": {"query": "`+phrase+`", "type": "phrase", "fields": ["materials", "title", "description"]}}}`)))
 	if err != nil {
@@ -81,13 +72,13 @@ func onMessageEvent(bot *linebot.Client, event *linebot.Event) {
 	switch recvMsg := event.Message.(type) {
 	case *linebot.TextMessage:
 		log.Printf("%s: dispName=%s, text=%s\n", event.Timestamp.String(), resp.DisplayName, recvMsg.Text)
-		replyRecipeCarousel(bot, (*event).ReplyToken, recvMsg.Text)
+		replyRecipe(bot, (*event).ReplyToken, recvMsg.Text)
 	default:
 		log.Printf("%s: dispName=%s\n", event.Timestamp.String(), resp.DisplayName)
 	}
 }
 
-func main() {
+func serveAsBot() {
 	handler, err := httphandler.New(ChSecret, ChToken)
 	if err != nil {
 		log.Fatal(err)
@@ -106,7 +97,7 @@ func main() {
 			}
 		}
 	})
-	http.Handle("/recipe-linebot/callback", handler)
+	http.Handle(ListenPath, handler)
 	if err := http.ListenAndServeTLS(ListenAddr, CertFile, KeyFile, nil); err != nil {
 		log.Fatal(err)
 	}

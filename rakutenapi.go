@@ -1,7 +1,7 @@
 /**
  * Copyright (C) 2016 tech0522.tk
  */
-package rakutenapi
+package main
 
 import (
 	"encoding/json"

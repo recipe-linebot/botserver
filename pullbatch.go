@@ -37,7 +37,7 @@ type RankingDocument struct {
 	Recipes []int  `json:"recipes"`
 }
 
-func registerRecipes(categoryId string, categoryName string) error {
+func pullRecipesOnCategory(categoryId string, categoryName string) error {
 	time.Sleep(APICallInterval)
 	ranking, err := rakutenapi.FetchRecipeRanking(categoryId, RakutenAppId)
 	if err != nil {
@@ -76,13 +76,13 @@ func registerRecipes(categoryId string, categoryName string) error {
 	return nil
 }
 
-func main() {
+func pullRecipes() {
 	categories, err := rakutenapi.FetchRecipeCategories(rakutenapi.RecipeCategoryAll, RakutenAppId)
 	if err != nil {
 		log.Print(err)
 	}
 	for _, category := range categories.By.Large {
-		if err := registerRecipes(category.Id, category.Name); err != nil {
+		if err := pullRecipesOnCategory(category.Id, category.Name); err != nil {
 			log.Print(err)
 		}
 	}
@@ -92,7 +92,7 @@ func main() {
 			log.Print(err)
 		}
 		categoryId := path.Base(categoryUrl.Path)
-		if err := registerRecipes(categoryId, category.Name); err != nil {
+		if err := pullRecipesOnCategory(categoryId, category.Name); err != nil {
 			log.Print(err)
 		}
 	}
@@ -102,7 +102,7 @@ func main() {
 			log.Print(err)
 		}
 		categoryId := path.Base(categoryUrl.Path)
-		if err := registerRecipes(categoryId, category.Name); err != nil {
+		if err := pullRecipesOnCategory(categoryId, category.Name); err != nil {
 			log.Print(err)
 		}
 	}
