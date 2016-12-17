@@ -17,10 +17,14 @@ import (
 )
 
 const ButtonLabel = "レシピを開く"
+const MaxRecipesToReply = 5
+const MaxRecipeDescriptionLength = 60
+const RecipeDescriptionTailIfTooLong = "..."
+const RecipeCarouselAltTextTailing = "..."
 
 func replyRecipe(bot *linebot.Client, replyToken string, phrase string) {
 	apiUrl := url.URL{Scheme: "http", Host: ElasticDBHost, Path: path.Join(ElasticDBIndex, ElasticDBRecipeDocType, "_search")}
-	resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewBuffer([]byte(`{"size": 5, "query": {"multi_match": {"query": "`+phrase+`", "type": "phrase", "fields": ["materials", "title", "description"]}}}`)))
+	resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewBuffer([]byte(`{"size": `+MaxRecipesToReply+`, "query": {"multi_match": {"query": "`+phrase+`", "type": "phrase", "fields": ["materials", "title", "description"]}}}`)))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,14 +55,16 @@ func replyRecipe(bot *linebot.Client, replyToken string, phrase string) {
 	var cols []*linebot.CarouselColumn
 	for _, hit := range result.Hits.Hits {
 		desc := hit.Source.Description
-		if len(desc) > 60 {
-			desc = desc[0:57] + "..."
+		if len(desc) > MaxRecipeDescriptionLength {
+			offset_to_shorten = MaxRecipeDescriptionLength - len(RecipeDescriptionTailIfTooLong)
+			desc = desc[0:offset_to_shorten] + RecipeDescriptionTailIfTooLong
 		}
 		cols = append(cols, linebot.NewCarouselColumn(hit.Source.ImageUrl, hit.Source.Title, desc,
 			linebot.NewURITemplateAction(ButtonLabel, hit.Source.Url)))
 	}
+	altText = result.Hits.Hits[0].Source.Title + RecipeCarouselAltTextTailing
 	tmpl := linebot.NewCarouselTemplate(cols...)
-	replyMsg := linebot.NewTemplateMessage(result.Hits.Hits[0].Source.Title+",...", tmpl)
+	replyMsg := linebot.NewTemplateMessage(altText, tmpl)
 	if _, err = bot.ReplyMessage(replyToken, replyMsg).Do(); err != nil {
 		log.Fatal(err)
 	}
