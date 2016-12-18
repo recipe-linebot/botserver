@@ -17,7 +17,7 @@ import (
 )
 
 const ButtonLabel = "レシピを開く"
-const MaxRecipesToReply = 5
+const MaxRecipesToReply = "5"
 const MaxRecipeDescriptionLength = 60
 const RecipeDescriptionTailIfTooLong = "..."
 const RecipeCarouselAltTextTailing = "..."
@@ -60,13 +60,13 @@ func replyRecipe(bot *linebot.Client, replyToken string, phrase string, config *
 	for _, hit := range result.Hits.Hits {
 		desc := hit.Source.Description
 		if len(desc) > MaxRecipeDescriptionLength {
-			offset_to_shorten = MaxRecipeDescriptionLength - len(RecipeDescriptionTailIfTooLong)
+			offset_to_shorten := MaxRecipeDescriptionLength - len(RecipeDescriptionTailIfTooLong)
 			desc = desc[0:offset_to_shorten] + RecipeDescriptionTailIfTooLong
 		}
 		cols = append(cols, linebot.NewCarouselColumn(hit.Source.ImageUrl, hit.Source.Title, desc,
 			linebot.NewURITemplateAction(ButtonLabel, hit.Source.Url)))
 	}
-	altText = result.Hits.Hits[0].Source.Title + RecipeCarouselAltTextTailing
+	altText := result.Hits.Hits[0].Source.Title + RecipeCarouselAltTextTailing
 	tmpl := linebot.NewCarouselTemplate(cols...)
 	replyMsg := linebot.NewTemplateMessage(altText, tmpl)
 	if _, err = bot.ReplyMessage(replyToken, replyMsg).Do(); err != nil {
@@ -81,14 +81,15 @@ func onMessageEvent(bot *linebot.Client, event *linebot.Event, config *RecipeLin
 	}
 	switch recvMsg := event.Message.(type) {
 	case *linebot.TextMessage:
-		log.Printf("%s: dispName=%s, text=%s\n", event.Timestamp.String(), resp.DisplayName, recvMsg.Text)
-		replyRecipe(bot, (*event).ReplyToken, recvMsg.Text)
+		log.Printf("receive text message: from=%s, text=%s\n", resp.DisplayName, recvMsg.Text)
+		replyRecipe(bot, (*event).ReplyToken, recvMsg.Text, config)
 	default:
-		log.Printf("%s: dispName=%s\n", event.Timestamp.String(), resp.DisplayName)
+		log.Printf("receive a some kind of event: from=%s\n", resp.DisplayName)
 	}
 }
 
 func serveAsBot(config *RecipeLinebotConfig) {
+	log.Printf("start bot server: addr=%s, path=%s", config.BotServer.ListenAddr, config.BotServer.APIPath)
 	handler, err := httphandler.New(config.BotServer.ChSecret, config.BotServer.ChToken)
 	if err != nil {
 		log.Fatal(err)
@@ -107,9 +108,10 @@ func serveAsBot(config *RecipeLinebotConfig) {
 			}
 		}
 	})
-	http.Handle(ListenPath, handler)
+	http.Handle(config.BotServer.APIPath, handler)
 	if err := http.ListenAndServeTLS(config.BotServer.ListenAddr, config.BotServer.CertFilePath,
 		config.BotServer.KeyFilePath, nil); err != nil {
 		log.Fatal(err)
 	}
+	log.Print("bot server finished")
 }

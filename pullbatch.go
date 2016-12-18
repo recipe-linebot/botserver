@@ -28,8 +28,8 @@ type RankingDocument struct {
 }
 
 func pullRecipesOnCategory(categoryId string, categoryName string, config *RecipeLinebotConfig) error {
-	time.Sleep(APICallInterval)
-	ranking, err := FetchRecipeRanking(categoryId, RakutenAppId)
+	time.Sleep(time.Duration(config.RakutenAPI.CallInterval) * time.Second)
+	ranking, err := FetchRecipeRanking(categoryId, config.RakutenAPI.AppId)
 	if err != nil {
 		return err
 	}
@@ -40,7 +40,7 @@ func pullRecipesOnCategory(categoryId string, categoryName string, config *Recip
 		for _, recipe := range ranking.Recipes {
 			log.Printf("post recipe: id=%v, title=%v", recipe.Id, recipe.Title)
 			apiUrl := url.URL{Scheme: "http", Host: config.RecipeDB.Host,
-				Path: path.Join(config.RecipeDB.Index, config.RecipeDB.RecipeDocType, strconv.Itoa(recipe.Id))}
+				Path: path.Join(config.RecipeDB.Index, config.RecipeDB.RecipeDoctype, strconv.Itoa(recipe.Id))}
 			imageUrl, err := url.Parse(recipe.LargeImageUrl)
 			if err != nil {
 				log.Fatal(err)
@@ -56,8 +56,8 @@ func pullRecipesOnCategory(categoryId string, categoryName string, config *Recip
 			recipes = append(recipes, recipe.Id)
 		}
 		log.Printf("post ranking: category=%v(%v), recipes=%v", categoryId, categoryName, recipes)
-		apiUrl := url.URL{Scheme: "http", Host: ElasticDBHost,
-			Path: path.Join(config.RecipeDB.Index, ElasticDBRankingDocType, categoryId)}
+		apiUrl := url.URL{Scheme: "http", Host: config.RecipeDB.Host,
+			Path: path.Join(config.RecipeDB.Index, config.RecipeDB.RankingDoctype, categoryId)}
 		document := RankingDocument{Concept: categoryName, Recipes: recipes}
 		reqBody, nil := json.Marshal(document)
 		if err != nil {
@@ -71,10 +71,10 @@ func pullRecipesOnCategory(categoryId string, categoryName string, config *Recip
 func pullRecipes(config *RecipeLinebotConfig) {
 	categories, err := FetchRecipeCategories(RecipeCategoryAll, config.RakutenAPI.AppId)
 	if err != nil {
-		log.Print(err)
+		log.Fatal(err)
 	}
 	for _, category := range categories.By.Large {
-		if err := pullRecipesOnCategory(category.Id, category.Name); err != nil {
+		if err := pullRecipesOnCategory(category.Id, category.Name, config); err != nil {
 			log.Print(err)
 		}
 	}
@@ -84,7 +84,7 @@ func pullRecipes(config *RecipeLinebotConfig) {
 			log.Print(err)
 		}
 		categoryId := path.Base(categoryUrl.Path)
-		if err := pullRecipesOnCategory(categoryId, category.Name); err != nil {
+		if err := pullRecipesOnCategory(categoryId, category.Name, config); err != nil {
 			log.Print(err)
 		}
 	}
@@ -94,7 +94,7 @@ func pullRecipes(config *RecipeLinebotConfig) {
 			log.Print(err)
 		}
 		categoryId := path.Base(categoryUrl.Path)
-		if err := pullRecipesOnCategory(categoryId, category.Name); err != nil {
+		if err := pullRecipesOnCategory(categoryId, category.Name, config); err != nil {
 			log.Print(err)
 		}
 	}
