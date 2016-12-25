@@ -17,6 +17,8 @@ import (
 )
 
 const ButtonLabel = "レシピを開く"
+const NotFoundReplyStickerPackageID = "2"
+const NotFoundReplyStickerID = "38"
 const MaxRecipesToReply = "5"
 const MaxRecipeDescriptionLength = 60
 const RecipeDescriptionTailIfTooLong = "..."
@@ -53,22 +55,24 @@ func replyRecipe(bot *linebot.Client, replyToken string, phrase string, config *
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		log.Fatal(err)
 	}
+	var replyMsg linebot.Message
 	if result.Hits.Total == 0 {
-		return
-	}
-	var cols []*linebot.CarouselColumn
-	for _, hit := range result.Hits.Hits {
-		desc := hit.Source.Description
-		if len(desc) > MaxRecipeDescriptionLength {
-			offset_to_shorten := MaxRecipeDescriptionLength - len(RecipeDescriptionTailIfTooLong)
-			desc = desc[0:offset_to_shorten] + RecipeDescriptionTailIfTooLong
+		replyMsg = linebot.NewStickerMessage(NotFoundReplyStickerPackageID, NotFoundReplyStickerID)
+	} else {
+		var cols []*linebot.CarouselColumn
+		for _, hit := range result.Hits.Hits {
+			desc := hit.Source.Description
+			if len(desc) > MaxRecipeDescriptionLength {
+				offset_to_shorten := MaxRecipeDescriptionLength - len(RecipeDescriptionTailIfTooLong)
+				desc = desc[0:offset_to_shorten] + RecipeDescriptionTailIfTooLong
+			}
+			cols = append(cols, linebot.NewCarouselColumn(hit.Source.ImageUrl, hit.Source.Title, desc,
+				linebot.NewURITemplateAction(ButtonLabel, hit.Source.Url)))
 		}
-		cols = append(cols, linebot.NewCarouselColumn(hit.Source.ImageUrl, hit.Source.Title, desc,
-			linebot.NewURITemplateAction(ButtonLabel, hit.Source.Url)))
+		altText := result.Hits.Hits[0].Source.Title + RecipeCarouselAltTextTailing
+		tmpl := linebot.NewCarouselTemplate(cols...)
+		replyMsg = linebot.NewTemplateMessage(altText, tmpl)
 	}
-	altText := result.Hits.Hits[0].Source.Title + RecipeCarouselAltTextTailing
-	tmpl := linebot.NewCarouselTemplate(cols...)
-	replyMsg := linebot.NewTemplateMessage(altText, tmpl)
 	if _, err = bot.ReplyMessage(replyToken, replyMsg).Do(); err != nil {
 		log.Fatal(err)
 	}
