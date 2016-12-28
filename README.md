@@ -4,11 +4,9 @@
 
 Production codes of the bot service on LINE, "食材 de レシピ".
 
-Try the bot with add button or scanning this QR code on LINE app !
+Try the bot with add button or scanning the <a href="http://qr-official.line.me/L/nqhu30aNr4.png">QR code</a> on LINE app !
 
 <a href="https://line.me/R/ti/p/%40hti3833f"><img height="24" border="0" alt="add friend button" src="https://scdn.line-apps.com/n/line_add_friends/btn/ja.png"></a>
-<img height="96" src="http://qr-official.line.me/L/nqhu30aNr4.png">
-
 
 ## Article
 
