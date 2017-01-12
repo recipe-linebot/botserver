@@ -63,8 +63,8 @@ func replyRecipe(bot *linebot.Client, replyToken string, phrase string, config *
 		for _, hit := range result.Hits.Hits {
 			desc := hit.Source.Description
 			if len(desc) > MaxRecipeDescriptionLength {
-				offset_to_shorten := MaxRecipeDescriptionLength - len(RecipeDescriptionTailIfTooLong)
-				desc = desc[0:offset_to_shorten] + RecipeDescriptionTailIfTooLong
+				shortenOffset := MaxRecipeDescriptionLength - len(RecipeDescriptionTailIfTooLong)
+				desc = desc[0:shortenOffset] + RecipeDescriptionTailIfTooLong
 			}
 			cols = append(cols, linebot.NewCarouselColumn(hit.Source.ImageUrl, hit.Source.Title, desc,
 				linebot.NewURITemplateAction(ButtonLabel, hit.Source.Url)))
