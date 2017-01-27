@@ -11,17 +11,18 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"unicode/utf8"
 
 	"github.com/line/line-bot-sdk-go/linebot"
 	"github.com/line/line-bot-sdk-go/linebot/httphandler"
 )
 
-const ButtonLabel = "レシピを開く"
+const ButtonLabel = "レシピをみる"
 const NotFoundReplyStickerPackageID = "2"
 const NotFoundReplyStickerID = "38"
 const MaxRecipesToReply = "5"
-const MaxRecipeDescriptionLength = 60
-const RecipeDescriptionTailIfTooLong = "..."
+const MaxRecipeDescLength = 60
+const RecipeDescTailIfTooLong = "..."
 const RecipeCarouselAltTextTailing = "..."
 
 type RecipeDBSearchResult struct {
@@ -29,10 +30,10 @@ type RecipeDBSearchResult struct {
 		Total int `json:"total"`
 		Hits  []struct {
 			Source struct {
-				Title       string `json:"title"`
-				Description string `json:"description"`
-				ImageUrl    string `json:"image_url"`
-				Url         string `json:"detail_url"`
+				Title    string `json:"title"`
+				Desc  	 string `json:"description"`
+				ImageUrl string `json:"image_url"`
+				Url      string `json:"detail_url"`
 			} `json:"_source"`
 		} `json:"hits"`
 	} `json:"hits"`
@@ -61,10 +62,13 @@ func replyRecipe(bot *linebot.Client, replyToken string, phrase string, config *
 	} else {
 		var cols []*linebot.CarouselColumn
 		for _, hit := range result.Hits.Hits {
-			desc := hit.Source.Description
-			if len(desc) > MaxRecipeDescriptionLength {
-				shortenOffset := MaxRecipeDescriptionLength - len(RecipeDescriptionTailIfTooLong)
-				desc = desc[0:shortenOffset] + RecipeDescriptionTailIfTooLong
+			desc := hit.Source.Desc
+			if len(desc) > MaxRecipeDescLength {
+				descEnd := MaxRecipeDescLength - len(RecipeDescTailIfTooLong)
+				for !utf8.RuneStart(desc[descEnd]) {
+					descEnd--
+				}
+				desc = desc[0:descEnd] + RecipeDescTailIfTooLong
 			}
 			cols = append(cols, linebot.NewCarouselColumn(hit.Source.ImageUrl, hit.Source.Title, desc,
 				linebot.NewURITemplateAction(ButtonLabel, hit.Source.Url)))
