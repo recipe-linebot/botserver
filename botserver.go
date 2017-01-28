@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/line/line-bot-sdk-go/linebot"
@@ -31,7 +32,7 @@ type RecipeDBSearchResult struct {
 		Hits  []struct {
 			Source struct {
 				Title    string `json:"title"`
-				Desc  	 string `json:"description"`
+				Desc     string `json:"description"`
 				ImageUrl string `json:"image_url"`
 				Url      string `json:"detail_url"`
 			} `json:"_source"`
@@ -39,11 +40,25 @@ type RecipeDBSearchResult struct {
 	} `json:"hits"`
 }
 
-func replyRecipe(bot *linebot.Client, replyToken string, phrase string, config *RecipeLinebotConfig) {
+func replyRecipe(bot *linebot.Client, replyToken string, query string, config *RecipeLinebotConfig) {
+	queryPhrases = strings.Fields(query)
+	var reqBody bytes.Buffer
+	reqBody.WriteString(`{"size": `)
+	reqBody.WriteString(MaxRecipesToReply)
+	reqBody.WriteString(`, "query": {"bool": {"should": [`)
+	for idx, phrase := range queryPhrases {
+		if idx != 0 {
+			reqBody.WriteString(`, `)
+		}
+		reqBody.WriteString(`{"multi_match": {"query": "`)
+		reqBody.WriteString(phrase)
+		reqBody.WriteString(`", "type": "phrase", "fields": ["materials", "title", "description"]}}`)
+	}
+	reqBody.WriteString(`]}}}`)
+
 	apiUrl := url.URL{Scheme: "http", Host: config.RecipeDB.Host,
 		Path: path.Join(config.RecipeDB.Index, config.RecipeDB.RecipeDoctype, "_search")}
-	resp, err := http.Post(apiUrl.String(), "application/json",
-		bytes.NewBuffer([]byte(`{"size": `+MaxRecipesToReply+`, "query": {"multi_match": {"query": "`+phrase+`", "type": "phrase", "fields": ["materials", "title", "description"]}}}`)))
+	resp, err := http.Post(apiUrl.String(), "application/json", reqBody)
 	if err != nil {
 		log.Fatal(err)
 	}
