@@ -17,7 +17,7 @@ import (
 	"github.com/line/line-bot-sdk-go/linebot/httphandler"
 )
 
-const ButtonLabel = "レシピをみる"
+const ButtonLabel = "レシピを開く"
 const NotFoundReplyStickerPackageID = "2"
 const NotFoundReplyStickerID = "38"
 const MaxRecipesToReply = "5"
