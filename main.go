@@ -14,11 +14,14 @@ type RecipeLinebotConfig struct {
 	BotServer struct {
 		ListenAddr   string `json:"listen_addr"`
 		APIPath      string `json:"api_path"`
-		CertFilePath string `json:"cert_file_path"`
-		KeyFilePath  string `json:"key_file_path"`
+		CertFilePath string `json:"certfile_filepath"`
+		KeyFilePath  string `json:"keyfile_filepath"`
 		ChSecret     string `json:"channel_secret"`
 		ChToken      string `json:"channel_token"`
 	} `json:"bot_server"`
+	PullBatch struct {
+		ProgressFilePath string `json:"progress_filepath"`
+	} `json:"pull_batch"`
 	RecipeDB struct {
 		Host           string `json:"host"`
 		Index          string `json:"index"`
