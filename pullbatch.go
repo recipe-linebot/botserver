@@ -4,15 +4,45 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strconv"
 	"time"
 )
+
+type PullingProgress struct {
+	AllCategories     RecipeAllCategory
+	LargeCategoryIdx  int
+	MediumCategoryIdx int
+	SmallCategoryIdx  int
+}
+
+func restorePullingProgress(restorePath string, progress *PullingProgress) error {
+	restoreFile, err := os.Open(restorePath)
+	if err != nil {
+		return err
+	}
+	defer restoreFile.Close()
+	decoder := gob.NewDecoder(bufio.NewReader(restoreFile))
+	return decoder.Decode(&progress)
+}
+
+func storePullingProgress(progress *PullingProgress, storePath string) error {
+	storeFile, err := os.OpenFile(storePath, os.O_WRONLY + os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer storeFile.Close()
+	encoder := gob.NewEncoder(bufio.NewWriter(storeFile))
+	return encoder.Encode(&progress)
+}
 
 type RecipeDocument struct {
 	Materials   []string `json:"materials"`
@@ -69,33 +99,82 @@ func pullRecipesOnCategory(categoryId string, categoryName string, config *Recip
 }
 
 func pullRecipes(config *RecipeLinebotConfig) {
-	categories, err := FetchRecipeCategories(RecipeCategoryAll, config.RakutenAPI.AppId)
+	log.Print("start pull batch")
+
+	// Restore the progress up to the previous working
+	var progress PullingProgress
+	restored := true
+	err := restorePullingProgress(config.PullBatch.ProgressFilePath, &progress)
+	if err != nil {
+		if os.IsNotExist(err) {
+			restored = false
+		} else {
+			log.Fatal(err)
+		}
+	}
+
+	if !restored {
+		allCategories, err := FetchRecipeCategories(RecipeCategoryAll, config.RakutenAPI.AppId)
+		if err != nil {
+			log.Fatal(err)
+		}
+		progress.AllCategories = *allCategories
+	}
+	for idx, category := range progress.AllCategories.By.Large {
+		if idx <= progress.LargeCategoryIdx {
+			continue
+		}
+		err = pullRecipesOnCategory(category.Id, category.Name, config)
+		if err != nil {
+			log.Fatal(err)
+		}
+		progress.LargeCategoryIdx = idx
+		err = storePullingProgress(&progress, config.PullBatch.ProgressFilePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	for idx, category := range progress.AllCategories.By.Medium {
+		if idx <= progress.MediumCategoryIdx {
+			continue
+		}
+		categoryUrl, err := url.Parse(category.Url)
+		if err != nil {
+			log.Fatal(err)
+		}
+		categoryId := path.Base(categoryUrl.Path)
+		err = pullRecipesOnCategory(categoryId, category.Name, config)
+		if err != nil {
+			log.Fatal(err)
+		}
+		progress.MediumCategoryIdx = idx
+		err = storePullingProgress(&progress, config.PullBatch.ProgressFilePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	for idx, category := range progress.AllCategories.By.Small {
+		if idx <= progress.SmallCategoryIdx {
+			continue
+		}
+		categoryUrl, err := url.Parse(category.Url)
+		if err != nil {
+			log.Fatal(err)
+		}
+		categoryId := path.Base(categoryUrl.Path)
+		err = pullRecipesOnCategory(categoryId, category.Name, config)
+		if err != nil {
+			log.Fatal(err)
+		}
+		progress.SmallCategoryIdx = idx
+		err = storePullingProgress(&progress, config.PullBatch.ProgressFilePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	err = os.Remove(config.PullBatch.ProgressFilePath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	for _, category := range categories.By.Large {
-		if err := pullRecipesOnCategory(category.Id, category.Name, config); err != nil {
-			log.Print(err)
-		}
-	}
-	for _, category := range categories.By.Medium {
-		categoryUrl, err := url.Parse(category.Url)
-		if err != nil {
-			log.Print(err)
-		}
-		categoryId := path.Base(categoryUrl.Path)
-		if err := pullRecipesOnCategory(categoryId, category.Name, config); err != nil {
-			log.Print(err)
-		}
-	}
-	for _, category := range categories.By.Small {
-		categoryUrl, err := url.Parse(category.Url)
-		if err != nil {
-			log.Print(err)
-		}
-		categoryId := path.Base(categoryUrl.Path)
-		if err := pullRecipesOnCategory(categoryId, category.Name, config); err != nil {
-			log.Print(err)
-		}
-	}
+	log.Print("pull batch finished")
 }
