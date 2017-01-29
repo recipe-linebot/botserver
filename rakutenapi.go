@@ -60,7 +60,8 @@ func FetchRecipeCategories(categoryType RecipeCategoryType, appId string) (*Reci
 	if categoryType != RecipeCategoryAll {
 		apiUrl.RawQuery += "&categoryType=" + string(categoryType)
 	}
-	resp, err := http.Get(apiUrl.String())
+	client := http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+	resp, err := client.Get(apiUrl.String())
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +109,8 @@ func FetchRecipeRanking(categoryId string, appId string) (*RecipeRanking, error)
 	if categoryId != "" {
 		apiUrl.RawQuery += "&categoryId=" + categoryId
 	}
-	resp, err := http.Get(apiUrl.String())
+	client := http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
+	resp, err := client.Get(apiUrl.String())
 	if err != nil {
 		return nil, err
 	}
