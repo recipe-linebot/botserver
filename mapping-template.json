@@ -1,0 +1,52 @@
+{
+	"template": "recipe-linebot-*",
+	"settings": {
+		"number_of_shards": 5,
+		"number_of_replicas": 0,
+		"analysis": {
+			"analyzer": {
+				"kana_text": {
+					"tokenizer": "kana_ngram",
+					"filter": ["kana_normalization"]
+				},
+				"kana_keyword": {
+					"tokenizer": "letter",
+					"filter": ["kana_normalization"]
+				}
+			},
+			"tokenizer": {
+				"kana_ngram": {"type": "ngram", "token_chars": ["letter"]}
+			},
+			"filter": {
+				"kana_normalization": {
+					"type": "icu_transform",
+					"id": "Halfwidth-Fullwidth; Katakana-Hiragana;"
+				}
+			}
+		}
+	},
+	"mappings": {
+		"recipe": {
+			"_all": {"enabled": false},
+			"properties": {
+				"materials": {
+					"type": "text", "analyzer": "kana_text",
+					"fields" : {
+						"keyword" : {"type": "text", "analyzer": "kana_keyword"}
+					}
+				},
+				"title": {"type": "text", "analyzer": "kana_text"},
+				"description": {"type": "text", "analyzer": "kana_text"},
+				"image_url": {"type": "keyword", "index": "no"},
+				"detail_url": {"type": "keyword", "index": "no"}
+			}
+		},
+		"ranking": {
+			"_all": {"enabled": false},
+			"properties": {
+				"concept": {"type": "text", "analyzer": "kana_text"},
+				"recipes": {"type": "long", "index": "no", "doc_values": false}
+			}
+		}
+	}
+}
