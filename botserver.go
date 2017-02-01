@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/line/line-bot-sdk-go/linebot"
@@ -21,10 +20,21 @@ import (
 const ButtonLabel = "レシピを開く"
 const NotFoundReplyStickerPackageID = "2"
 const NotFoundReplyStickerID = "38"
-const MaxRecipesToReply = "5"
+const MaxRecipesToReply = 5
 const MaxRecipeDescLength = 60
 const RecipeDescTailIfTooLong = "..."
 const RecipeCarouselAltTextTailing = "..."
+
+type RecipeDBSearchQuery struct {
+	Size int `json:"size"`
+	Query struct {
+		MultiMatch struct {
+			Query string `json:"query"`
+			Type string `json:"type"`
+			Fields []string `json:"fields"`
+		} `json:"multi_match"`
+	} `json:"query"`
+}
 
 type RecipeDBSearchResult struct {
 	Hits struct {
@@ -40,25 +50,23 @@ type RecipeDBSearchResult struct {
 	} `json:"hits"`
 }
 
-func replyRecipe(bot *linebot.Client, replyToken string, query string, config *RecipeLinebotConfig) {
-	queryPhrases := strings.Fields(query)
-	var reqBody bytes.Buffer
-	reqBody.WriteString(`{"size": `)
-	reqBody.WriteString(MaxRecipesToReply)
-	reqBody.WriteString(`, "query": {"bool": {"should": [`)
-	for idx, phrase := range queryPhrases {
-		if idx != 0 {
-			reqBody.WriteString(`, `)
-		}
-		reqBody.WriteString(`{"multi_match": {"query": "`)
-		reqBody.WriteString(phrase)
-		reqBody.WriteString(`", "type": "phrase", "fields": ["materials", "title", "description"]}}`)
-	}
-	reqBody.WriteString(`]}}}`)
+func buildSearchQuery(rawQuery string) ([]byte, error) {
+	var query RecipeDBSearchQuery
+	query.Size = MaxRecipesToReply
+	query.Query.MultiMatch.Query = rawQuery
+	query.Query.MultiMatch.Type = "cross_fields"
+	query.Query.MultiMatch.Fields = []string{"materials.keyword^100", "materials^5", "title", "description"}
+	return json.Marshal(query)
+}
 
+func replyRecipe(bot *linebot.Client, replyToken string, rawQuery string, config *RecipeLinebotConfig) {
+	query, err := buildSearchQuery(rawQuery)
+	if err != nil {
+		log.Fatal(err)
+	}
 	apiUrl := url.URL{Scheme: "http", Host: config.RecipeDB.Host,
 		Path: path.Join(config.RecipeDB.Index, config.RecipeDB.RecipeDoctype, "_search")}
-	resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewReader(reqBody.Bytes()))
+	resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewReader(query))
 	if err != nil {
 		log.Fatal(err)
 	}
