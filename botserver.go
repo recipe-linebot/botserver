@@ -26,11 +26,11 @@ const RecipeDescTailIfTooLong = "..."
 const RecipeCarouselAltTextTailing = "..."
 
 type RecipeDBSearchQuery struct {
-	Size int `json:"size"`
+	Size  int `json:"size"`
 	Query struct {
 		MultiMatch struct {
-			Query string `json:"query"`
-			Type string `json:"type"`
+			Query  string   `json:"query"`
+			Type   string   `json:"type"`
 			Fields []string `json:"fields"`
 		} `json:"multi_match"`
 	} `json:"query"`
@@ -50,27 +50,28 @@ type RecipeDBSearchResult struct {
 	} `json:"hits"`
 }
 
-func buildSearchQuery(rawQuery string) ([]byte, error) {
+func searchRecipes(rawQuery string, config *RecipeLinebotConfig) RecipeDBSearchResult {
+	// Build the search query
 	var query RecipeDBSearchQuery
 	query.Size = MaxRecipesToReply
 	query.Query.MultiMatch.Query = rawQuery
 	query.Query.MultiMatch.Type = "cross_fields"
 	query.Query.MultiMatch.Fields = []string{"materials.keyword^100", "materials^5", "title", "description"}
-	return json.Marshal(query)
-}
-
-func replyRecipe(bot *linebot.Client, replyToken string, rawQuery string, config *RecipeLinebotConfig) {
-	query, err := buildSearchQuery(rawQuery)
+	queryAsJson, err := json.Marshal(query)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Post the search request
 	apiUrl := url.URL{Scheme: "http", Host: config.RecipeDB.Host,
 		Path: path.Join(config.RecipeDB.Index, config.RecipeDB.RecipeDoctype, "_search")}
-	resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewReader(query))
+	resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewReader(queryAsJson))
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
+
+	// Interpret the response as search result
 	if resp.StatusCode != 200 {
 		body, _ := ioutil.ReadAll(resp.Body)
 		log.Fatal("Bad status code: code=" + resp.Status + " body=" + string(body))
@@ -79,41 +80,54 @@ func replyRecipe(bot *linebot.Client, replyToken string, rawQuery string, config
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		log.Fatal(err)
 	}
-	var replyMsg linebot.Message
-	if result.Hits.Total == 0 {
-		replyMsg = linebot.NewStickerMessage(NotFoundReplyStickerPackageID, NotFoundReplyStickerID)
-	} else {
-		var cols []*linebot.CarouselColumn
-		for _, hit := range result.Hits.Hits {
-			desc := hit.Source.Desc
-			if len(desc) > MaxRecipeDescLength {
-				descEnd := MaxRecipeDescLength - len(RecipeDescTailIfTooLong)
-				for !utf8.RuneStart(desc[descEnd]) {
-					descEnd--
-				}
-				desc = desc[0:descEnd] + RecipeDescTailIfTooLong
-			}
-			cols = append(cols, linebot.NewCarouselColumn(hit.Source.ImageUrl, hit.Source.Title, desc,
-				linebot.NewURITemplateAction(ButtonLabel, hit.Source.Url)))
-		}
-		altText := result.Hits.Hits[0].Source.Title + RecipeCarouselAltTextTailing
-		tmpl := linebot.NewCarouselTemplate(cols...)
-		replyMsg = linebot.NewTemplateMessage(altText, tmpl)
+	return result
+}
+
+func roundRecipeDescription(desc string) string {
+	if len(desc) <= MaxRecipeDescLength {
+		return desc
 	}
-	if _, err = bot.ReplyMessage(replyToken, replyMsg).Do(); err != nil {
-		log.Fatal(err)
+	descEnd := MaxRecipeDescLength - len(RecipeDescTailIfTooLong)
+	for !utf8.RuneStart(desc[descEnd]) {
+		descEnd--
 	}
+	return desc[0:descEnd] + RecipeDescTailIfTooLong
+}
+
+func newRecipesMessage(result *RecipeDBSearchResult) *linebot.TemplateMessage {
+	// build the carousel columns
+	var cols []*linebot.CarouselColumn
+	for _, hit := range result.Hits.Hits {
+		col := linebot.NewCarouselColumn(hit.Source.ImageUrl, hit.Source.Title,
+			roundRecipeDescription(hit.Source.Desc),
+			linebot.NewURITemplateAction(ButtonLabel, hit.Source.Url))
+		cols = append(cols, col)
+	}
+
+	// build as carousel message
+	altText := result.Hits.Hits[0].Source.Title + RecipeCarouselAltTextTailing
+	tmpl := linebot.NewCarouselTemplate(cols...)
+	return linebot.NewTemplateMessage(altText, tmpl)
 }
 
 func onMessageEvent(bot *linebot.Client, event *linebot.Event, config *RecipeLinebotConfig) {
-	resp, err := bot.GetProfile((*event.Source).UserID).Do()
+	resp, err := bot.GetProfile(event.Source.UserID).Do()
 	if err != nil {
 		log.Fatal(err)
 	}
 	switch recvMsg := event.Message.(type) {
 	case *linebot.TextMessage:
 		log.Printf("receive text message: from=%s, text=%s\n", resp.DisplayName, recvMsg.Text)
-		replyRecipe(bot, (*event).ReplyToken, recvMsg.Text, config)
+		result := searchRecipes(recvMsg.Text, config)
+		var replyMsg linebot.Message
+		if result.Hits.Total == 0 {
+			replyMsg = linebot.NewStickerMessage(NotFoundReplyStickerPackageID, NotFoundReplyStickerID)
+		} else {
+			replyMsg = newRecipesMessage(&result)
+		}
+		if _, err := bot.ReplyMessage(event.ReplyToken, replyMsg).Do(); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		log.Printf("receive a some kind of event: from=%s\n", resp.DisplayName)
 	}
