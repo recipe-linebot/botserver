@@ -10,8 +10,8 @@
 						"filter": ["kana_normalization"]
 					},
 					"kana_keyword": {
-						"tokenizer": "letter",
-						"filter": ["kana_normalization"]
+						"tokenizer": "kuromoji_tokenizer",
+						"filter": ["partofspeech", "kanji_readingform", "kana_normalization"]
 					}
 				},
 				"tokenizer": {
@@ -21,6 +21,14 @@
 					}
 				},
 				"filter": {
+					"partofspeech": {
+						"type": "kuromoji_part_of_speech",
+						"stoptags": ["接頭詞", "動詞", "形容詞", "副詞", "連体詞", "接続詞", "助詞", "助動詞", "感動詞", "記号", "その他", "フィラー", "非言語音", "語断片"]
+					},
+					"kanji_readingform": {
+						"type": "kuromoji_readingform",
+						"use_romaji": false
+					},
 					"kana_normalization": {
 						"type": "icu_transform",
 						"id": "Halfwidth-Fullwidth; Katakana-Hiragana;"
@@ -39,8 +47,18 @@
 						"keyword" : {"type": "text", "analyzer": "kana_keyword"}
 					}
 				},
-				"title": {"type": "text", "analyzer": "kana_text"},
-				"description": {"type": "text", "analyzer": "kana_text"},
+				"title": {
+					"type": "text", "analyzer": "kana_text"
+					"fields": {
+						"keyword": {"type": "text", "analyzer": "kana_keyword"}
+					}
+				},
+				"description": {
+					"type": "text", "analyzer": "kana_text"
+					"fields": {
+						"keyword": {"type": "text", "analyzer": "kana_keyword"}
+					}
+				},
 				"image_url": {"type": "keyword", "index": false},
 				"detail_url": {"type": "keyword", "index": false}
 			}
@@ -48,7 +66,12 @@
 		"ranking": {
 			"_all": {"enabled": false},
 			"properties": {
-				"concept": {"type": "text", "analyzer": "kana_text"},
+				"concept": {
+					"type": "text", "analyzer": "kana_text"
+					"fields": {
+						"keyword": {"type": "text", "analyzer": "kana_keyword"}
+					}
+				},
 				"recipes": {"type": "long", "index": false, "doc_values": false}
 			}
 		}

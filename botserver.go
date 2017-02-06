@@ -26,11 +26,11 @@ const RecipeDescTailIfTooLong = "..."
 const RecipeCarouselAltTextTailing = "..."
 
 type RecipeDBSearchQuery struct {
-	Size int `json:"size"`
+	Size  int `json:"size"`
 	Query struct {
 		MultiMatch struct {
-			Query string `json:"query"`
-			Type string `json:"type"`
+			Query  string   `json:"query"`
+			Type   string   `json:"type"`
 			Fields []string `json:"fields"`
 		} `json:"multi_match"`
 	} `json:"query"`
@@ -55,7 +55,8 @@ func buildSearchQuery(rawQuery string) ([]byte, error) {
 	query.Size = MaxRecipesToReply
 	query.Query.MultiMatch.Query = rawQuery
 	query.Query.MultiMatch.Type = "cross_fields"
-	query.Query.MultiMatch.Fields = []string{"materials.keyword^100", "materials^5", "title", "description"}
+	query.Query.MultiMatch.Fields = []string{"materials.keyword^100", "materials^5", "title.keyword^20", "title",
+		"description.keyword^20", "description"}
 	return json.Marshal(query)
 }
 
