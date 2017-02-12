@@ -2,7 +2,9 @@
 	"template": "recipe-linebot-*",
 	"settings": {
 		"index": {
+			"number_of_shards": 1,
 			"number_of_replicas": 0,
+			"store.type": "niofs",
 			"analysis": {
 				"analyzer": {
 					"kana_text": {
