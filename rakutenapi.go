@@ -1,11 +1,11 @@
 /**
- * Copyright (C) 2016 tech0522.tk
+ * Copyright (C) 2016, 2017 tech0522.tk
  */
 package main
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -60,18 +60,21 @@ func FetchRecipeCategories(categoryType RecipeCategoryType, appId string) (*Reci
 	if categoryType != RecipeCategoryAll {
 		apiUrl.RawQuery += "&categoryType=" + string(categoryType)
 	}
-	client := http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
-	resp, err := client.Get(apiUrl.String())
+	resp, err := http.Get(apiUrl.String())
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		return nil, errors.New("Bad status code: code=" + resp.Status + " body=" + string(body))
+		return nil, fmt.Errorf("Bad status code: url=%v, code=%v, body=%v", apiUrl.String(), resp.Status, string(body))
 	}
 	var allCategory RecipeAllCategory
-	if err := json.NewDecoder(resp.Body).Decode(&allCategory); err != nil {
+	err = json.Unmarshal(body, &allCategory)
+	if err != nil {
 		return nil, err
 	}
 	return &allCategory, nil
@@ -109,18 +112,21 @@ func FetchRecipeRanking(categoryId string, appId string) (*RecipeRanking, error)
 	if categoryId != "" {
 		apiUrl.RawQuery += "&categoryId=" + categoryId
 	}
-	client := http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
-	resp, err := client.Get(apiUrl.String())
+	resp, err := http.Get(apiUrl.String())
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		return nil, errors.New("Bad status code: code=" + resp.Status + " body=" + string(body))
+		return nil, fmt.Errorf("Bad status code: url=%v, code=%v, body=%v", apiUrl.String(), resp.Status, string(body))
 	}
 	var ranking RecipeRanking
-	if err := json.NewDecoder(resp.Body).Decode(&ranking); err != nil {
+	err = json.Unmarshal(body, &ranking)
+	if err != nil {
 		return nil, err
 	}
 	return &ranking, nil

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2016 tech0522.tk
+ * Copyright (C) 2016, 2017 tech0522.tk
  */
 package main
 
@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -35,7 +36,7 @@ func restorePullingProgress(restorePath string, progress *PullingProgress) error
 }
 
 func storePullingProgress(progress *PullingProgress, storePath string) error {
-	storeFile, err := os.OpenFile(storePath, os.O_WRONLY + os.O_CREATE, 0644)
+	storeFile, err := os.OpenFile(storePath, os.O_WRONLY+os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
@@ -82,7 +83,19 @@ func pullRecipesOnCategory(categoryId string, categoryName string, config *Recip
 			if err != nil {
 				log.Fatal(err)
 			}
-			http.Post(apiUrl.String(), "application/json", bytes.NewBuffer(reqBody))
+			resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewBuffer(reqBody))
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode/100 != 2 {
+				bodyAsString := "(failed to read)"
+				body, err := ioutil.ReadAll(resp.Body)
+				if err == nil {
+					bodyAsString = string(body)
+				}
+				log.Fatalf("Bad status code: url=%v, code=%v, body=%v", apiUrl.String(), resp.Status, bodyAsString)
+			}
 			recipes = append(recipes, recipe.Id)
 		}
 		log.Printf("post ranking: category=%v(%v), recipes=%v", categoryId, categoryName, recipes)
@@ -93,7 +106,19 @@ func pullRecipesOnCategory(categoryId string, categoryName string, config *Recip
 		if err != nil {
 			log.Fatal(err)
 		}
-		http.Post(apiUrl.String(), "application/json", bytes.NewBuffer(reqBody))
+		resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewBuffer(reqBody))
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode/100 != 2 {
+			bodyAsString := "(failed to read)"
+			body, err := ioutil.ReadAll(resp.Body)
+			if err == nil {
+				bodyAsString = string(body)
+			}
+			log.Fatalf("Bad status code: url=%v, code=%v, body=%v", apiUrl.String(), resp.Status, bodyAsString)
+		}
 	}
 	return nil
 }
