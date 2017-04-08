@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2016 tech0522.tk
+ * Copyright 2016 Tech0522
  */
 package main
 

@@ -16,7 +16,7 @@ Try the bot with add button or scanning the <a href="http://qr-official.line.me/
 
 MIT License
 
-Copyright (c) 2017 tech0522.tk
+Copyright 2016 Tech0522
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
