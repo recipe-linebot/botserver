@@ -28,7 +28,7 @@ const RecipeDescTailIfTooLong = "..."
 const RecipeCarouselAltTextTailing = "..."
 
 type PagingPostbackData struct {
-	From     int    `json:"from"`
+	Offset   int    `json:"offset"`
 	RawQuery string `json:"rawQuery"`
 }
 
@@ -43,7 +43,7 @@ func roundRecipeDescription(desc string) string {
 	return desc[0:descEnd] + RecipeDescTailIfTooLong
 }
 
-func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, from int) *linebot.TemplateMessage {
+func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, offset int) *linebot.TemplateMessage {
 	// Build the carousel columns
 	var cols []*linebot.CarouselColumn
 	needsPaging := false
@@ -62,15 +62,15 @@ func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, from int) 
 	if needsPaging {
 		var pbData PagingPostbackData
 		pbData.RawQuery = rawQuery
-		pbData.From = from + MaxRecipesToReply - 1
+		pbData.Offset = offset + MaxRecipesToReply - 1
 		pbDataAsJson, err := json.Marshal(pbData)
 		if err != nil {
 			log.Fatal(err)
 		}
 		col := linebot.NewCarouselColumn(
-			fmt.Sprintf(PagingCarouselImageURL, (from/(MaxRecipesToReply-1)%NumPagingCarouselImages)),
+			fmt.Sprintf(PagingCarouselImageURL, (offset/(MaxRecipesToReply-1)%NumPagingCarouselImages)),
 			PagingCarouselTitle,
-			fmt.Sprintf(PagingCarouselText, rawQuery, result.Hits.Total-pbData.From),
+			fmt.Sprintf(PagingCarouselText, rawQuery, result.Hits.Total-pbData.Offset),
 			linebot.NewPostbackTemplateAction(PagingButtonLabel, string(pbDataAsJson), ""))
 		cols = append(cols, col)
 	}
@@ -81,14 +81,14 @@ func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, from int) 
 	return linebot.NewTemplateMessage(altText, tmpl)
 }
 
-func suggestRecipes(bot *linebot.Client, event *linebot.Event, rawQuery string, from int, config *RecipeLinebotConfig) {
+func suggestRecipes(bot *linebot.Client, event *linebot.Event, rawQuery string, offset int, config *RecipeLinebotConfig) {
 	log.Printf("search: query=%s\n", rawQuery)
-	result := searchRecipes(rawQuery, from, MaxRecipesToReply, config)
+	result := searchRecipes(rawQuery, offset, MaxRecipesToReply, config)
 	var replyMsg linebot.Message
 	if result.Hits.Total == 0 {
 		replyMsg = linebot.NewStickerMessage(NotFoundReplyStickerPackageID, NotFoundReplyStickerID)
 	} else {
-		replyMsg = newRecipesMessage(&result, rawQuery, from)
+		replyMsg = newRecipesMessage(&result, rawQuery, offset)
 	}
 	if _, err := bot.ReplyMessage(event.ReplyToken, replyMsg).Do(); err != nil {
 		log.Fatal(err)
@@ -128,7 +128,7 @@ func serveAsBot(config *RecipeLinebotConfig) {
 			case linebot.EventTypePostback:
 				var pbData PagingPostbackData
 				json.Unmarshal([]byte(event.Postback.Data), &pbData)
-				suggestRecipes(bot, event, pbData.RawQuery, pbData.From, config)
+				suggestRecipes(bot, event, pbData.RawQuery, pbData.Offset, config)
 			}
 		}
 	})
