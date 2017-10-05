@@ -81,7 +81,7 @@ func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, offset int
 	return linebot.NewTemplateMessage(altText, tmpl)
 }
 
-func suggestRecipes(bot *linebot.Client, event *linebot.Event, rawQuery string, offset int, config *RecipeLinebotConfig) {
+func replyMessage(bot *linebot.Client, event *linebot.Event, rawQuery string, offset int, config *RecipeLinebotConfig) {
 	log.Printf("search: query=%s\n", rawQuery)
 	result := searchRecipes(rawQuery, offset, MaxRecipesToReply, config)
 	var replyMsg linebot.Message
@@ -123,12 +123,12 @@ func serveAsBot(config *RecipeLinebotConfig) {
 			case linebot.EventTypeMessage:
 				switch recvMsg := event.Message.(type) {
 				case *linebot.TextMessage:
-					suggestRecipes(bot, event, recvMsg.Text, 0, config)
+					replyMessage(bot, event, recvMsg.Text, 0, config)
 				}
 			case linebot.EventTypePostback:
 				var pbData PagingPostbackData
 				json.Unmarshal([]byte(event.Postback.Data), &pbData)
-				suggestRecipes(bot, event, pbData.RawQuery, pbData.Offset, config)
+				replyMessage(bot, event, pbData.RawQuery, pbData.Offset, config)
 			}
 		}
 	})
