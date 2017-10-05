@@ -43,7 +43,7 @@ func roundRecipeDescription(desc string) string {
 	return desc[0:descEnd] + RecipeDescTailIfTooLong
 }
 
-func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, offset int) *linebot.TemplateMessage {
+func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, offset int) (*linebot.TemplateMessage, error) {
 	// Build the carousel columns
 	var cols []*linebot.CarouselColumn
 	needsPaging := false
@@ -65,7 +65,7 @@ func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, offset int
 		pbData.Offset = offset + MaxRecipesToReply - 1
 		pbDataAsJson, err := json.Marshal(pbData)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 		col := linebot.NewCarouselColumn(
 			fmt.Sprintf(PagingCarouselImageURL, (offset/(MaxRecipesToReply-1)%NumPagingCarouselImages)),
@@ -81,16 +81,29 @@ func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, offset int
 	return linebot.NewTemplateMessage(altText, tmpl)
 }
 
+func replyRecipesMessage(replyToken string, result *RecipeDBSearchResult, rawQuery string, offset int) error {
+	msg, err := newRecipesMessage(result, rawQuery, offset)
+	if err == nil {
+		_, err := bot.ReplyMessage(replyToken, msg).Do()
+	}
+	return err
+}
+
+func replyNotFoundMessage(token string) {
+	msg := linebot.NewStickerMessage(NotFoundReplyStickerPackageID, NotFoundReplyStickerID)
+	_, err := bot.ReplyMessage(token, msg).Do()
+	return err
+}
+
 func replyMessage(bot *linebot.Client, event *linebot.Event, rawQuery string, offset int, config *RecipeLinebotConfig) {
 	log.Printf("search: query=%s\n", rawQuery)
 	result := searchRecipes(rawQuery, offset, MaxRecipesToReply, config)
-	var replyMsg linebot.Message
-	if result.Hits.Total == 0 {
-		replyMsg = linebot.NewStickerMessage(NotFoundReplyStickerPackageID, NotFoundReplyStickerID)
+	if result.Hits.Total > 0 {
+		err = replyRecipesMessage(event.ReplyToken, &result, rawQuery, offset)
 	} else {
-		replyMsg = newRecipesMessage(&result, rawQuery, offset)
+		err = replyNotFoundMessage(event.ReplyToken)
 	}
-	if _, err := bot.ReplyMessage(event.ReplyToken, replyMsg).Do(); err != nil {
+	if err != nil {
 		log.Fatal(err)
 	}
 }
