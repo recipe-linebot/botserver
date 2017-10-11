@@ -1,17 +1,13 @@
 /**
- * Copyright 2016 Tech0522
+ * Copyright 2017 recipe-linebot
  */
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
-	"path"
 	"unicode/utf8"
 
 	"github.com/line/line-bot-sdk-go/linebot"
@@ -22,7 +18,7 @@ const RecipeOpenButtonLabel = "レシピを開く"
 const PagingButtonLabel = "さらに読み込む"
 const PagingCarouselTitle = "　"
 const PagingCarouselText = "「%s」のレシピが他に %d 件あります。"
-const PagingCarouselImageURL = "https://tech0522.github.io/recipe-linebot/image/paging_%02d.jpg"
+const PagingCarouselImageURL = "https://recipe-linebot.github.io/botserver/image/paging_%02d.jpg"
 const NumPagingCarouselImages = 4
 const NotFoundReplyStickerPackageID = "2"
 const NotFoundReplyStickerID = "38"
@@ -31,68 +27,9 @@ const MaxRecipeDescLength = 60
 const RecipeDescTailIfTooLong = "..."
 const RecipeCarouselAltTextTailing = "..."
 
-type RecipeDBSearchQuery struct {
-	From  int `json:"from"`
-	Size  int `json:"size"`
-	Query struct {
-		MultiMatch struct {
-			Query  string   `json:"query"`
-			Type   string   `json:"type"`
-			Fields []string `json:"fields"`
-		} `json:"multi_match"`
-	} `json:"query"`
-}
-
-type RecipeDBSearchResult struct {
-	Hits struct {
-		Total int `json:"total"`
-		Hits  []struct {
-			Source struct {
-				Title    string `json:"title"`
-				Desc     string `json:"description"`
-				ImageUrl string `json:"image_url"`
-				Url      string `json:"detail_url"`
-			} `json:"_source"`
-		} `json:"hits"`
-	} `json:"hits"`
-}
-
 type PagingPostbackData struct {
-	From     int    `json:"from"`
+	Offset   int    `json:"offset"`
 	RawQuery string `json:"rawQuery"`
-}
-
-func searchRecipes(rawQuery string, from, size int, config *RecipeLinebotConfig) (result RecipeDBSearchResult) {
-	// Build the search query
-	var query RecipeDBSearchQuery
-	query.From = from
-	query.Size = size
-	query.Query.MultiMatch.Query = rawQuery
-	query.Query.MultiMatch.Type = "cross_fields"
-	query.Query.MultiMatch.Fields = []string{"materials.keyword^100", "materials^5", "title", "description"}
-	queryAsJson, err := json.Marshal(query)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Post the search request
-	apiUrl := url.URL{Scheme: "http", Host: config.RecipeDB.Host,
-		Path: path.Join(config.RecipeDB.Index, config.RecipeDB.RecipeDoctype, "_search")}
-	resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewReader(queryAsJson))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer resp.Body.Close()
-
-	// Interpret the response as search result
-	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		log.Fatal("Bad status code: code=" + resp.Status + " body=" + string(body))
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Fatal(err)
-	}
-	return result
 }
 
 func roundRecipeDescription(desc string) string {
@@ -106,7 +43,7 @@ func roundRecipeDescription(desc string) string {
 	return desc[0:descEnd] + RecipeDescTailIfTooLong
 }
 
-func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, from int) *linebot.TemplateMessage {
+func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, offset int) (*linebot.TemplateMessage, error) {
 	// Build the carousel columns
 	var cols []*linebot.CarouselColumn
 	needsPaging := false
@@ -125,15 +62,15 @@ func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, from int) 
 	if needsPaging {
 		var pbData PagingPostbackData
 		pbData.RawQuery = rawQuery
-		pbData.From = from + MaxRecipesToReply - 1
+		pbData.Offset = offset + MaxRecipesToReply - 1
 		pbDataAsJson, err := json.Marshal(pbData)
 		if err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 		col := linebot.NewCarouselColumn(
-			fmt.Sprintf(PagingCarouselImageURL, (from / (MaxRecipesToReply - 1) % NumPagingCarouselImages)),
+			fmt.Sprintf(PagingCarouselImageURL, (offset/(MaxRecipesToReply-1)%NumPagingCarouselImages)),
 			PagingCarouselTitle,
-			fmt.Sprintf(PagingCarouselText, rawQuery, result.Hits.Total-pbData.From),
+			fmt.Sprintf(PagingCarouselText, rawQuery, result.Hits.Total-pbData.Offset),
 			linebot.NewPostbackTemplateAction(PagingButtonLabel, string(pbDataAsJson), ""))
 		cols = append(cols, col)
 	}
@@ -144,16 +81,29 @@ func newRecipesMessage(result *RecipeDBSearchResult, rawQuery string, from int) 
 	return linebot.NewTemplateMessage(altText, tmpl)
 }
 
-func suggestRecipes(bot *linebot.Client, event *linebot.Event, rawQuery string, from int, config *RecipeLinebotConfig) {
-	log.Printf("search: query=%s\n", rawQuery)
-	result := searchRecipes(rawQuery, from, MaxRecipesToReply, config)
-	var replyMsg linebot.Message
-	if result.Hits.Total == 0 {
-		replyMsg = linebot.NewStickerMessage(NotFoundReplyStickerPackageID, NotFoundReplyStickerID)
-	} else {
-		replyMsg = newRecipesMessage(&result, rawQuery, from)
+func replyRecipesMessage(replyToken string, result *RecipeDBSearchResult, rawQuery string, offset int) error {
+	msg, err := newRecipesMessage(result, rawQuery, offset)
+	if err == nil {
+		_, err := bot.ReplyMessage(replyToken, msg).Do()
 	}
-	if _, err := bot.ReplyMessage(event.ReplyToken, replyMsg).Do(); err != nil {
+	return err
+}
+
+func replyNotFoundMessage(token string) {
+	msg := linebot.NewStickerMessage(NotFoundReplyStickerPackageID, NotFoundReplyStickerID)
+	_, err := bot.ReplyMessage(token, msg).Do()
+	return err
+}
+
+func replyMessage(bot *linebot.Client, event *linebot.Event, rawQuery string, offset int, config *RecipeLinebotConfig) {
+	log.Printf("search: query=%s\n", rawQuery)
+	result := searchRecipes(rawQuery, offset, MaxRecipesToReply, config)
+	if result.Hits.Total > 0 {
+		err = replyRecipesMessage(event.ReplyToken, &result, rawQuery, offset)
+	} else {
+		err = replyNotFoundMessage(event.ReplyToken)
+	}
+	if err != nil {
 		log.Fatal(err)
 	}
 }
@@ -186,12 +136,12 @@ func serveAsBot(config *RecipeLinebotConfig) {
 			case linebot.EventTypeMessage:
 				switch recvMsg := event.Message.(type) {
 				case *linebot.TextMessage:
-					suggestRecipes(bot, event, recvMsg.Text, 0, config)
+					replyMessage(bot, event, recvMsg.Text, 0, config)
 				}
 			case linebot.EventTypePostback:
 				var pbData PagingPostbackData
 				json.Unmarshal([]byte(event.Postback.Data), &pbData)
-				suggestRecipes(bot, event, pbData.RawQuery, pbData.From, config)
+				replyMessage(bot, event, pbData.RawQuery, pbData.Offset, config)
 			}
 		}
 	})
